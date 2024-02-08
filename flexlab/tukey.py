@@ -1,9 +1,19 @@
 # from __future__ import annotations
 from itertools import product
-from typing import TypeAlias
-from collections.abc import Iterable, Iterator
+from typing import TypeAlias, TypeVar, Generic
+from collections.abc import Iterable, Iterator, Generator
+from rich import print
+from rich.pretty import pprint
 
-Tukey: TypeAlias = "tuple[Tukey, Tukey] | None"
+T = TypeVar("T")
+
+IVector: TypeAlias = tuple[int, int]
+
+BinTree: TypeAlias = "tuple[BinTree, BinTree] | None"
+DataBinTree: TypeAlias = "tuple[T, DataBinTree, DataBinTree] | None"
+
+Tukey: TypeAlias = BinTree
+DisplaceTree: TypeAlias = "DataBinTree[IVector]"
 
 
 def _parse_tukey(itr: Iterator[str]) -> Tukey:
@@ -16,9 +26,28 @@ def _parse_tukey(itr: Iterator[str]) -> Tukey:
 def parse_tukey(inp: Iterable[str]) -> Tukey:
     itr = iter(inp)
     try:
-        return _parse_tukey(itr)
+        tk = _parse_tukey(itr)
     except StopIteration:
         raise SyntaxError("Tree was never closed")
+
+    try:
+        next(itr)
+    except StopIteration:
+        return tk
+
+    raise SyntaxError("Unexpected character after tree was formed")
+
+def _encode_tukey(tk: Tukey) -> str:
+    if tk is None:
+        return "."
+
+    return "+" + _encode_tukey(tk[0]) + _encode_tukey(tk[1])
+
+
+def encode_tukey(tk: Tukey) -> str:
+    return _encode_tukey(tk[0]) + _encode_tukey(tk[1])
+
+
 
 
 def render_tree(tk: Tukey) -> str:
@@ -41,17 +70,17 @@ def count_units(tk: Tukey) -> int:
     return count
 
 
-def add_tuple(a: tuple[int, int], b: tuple[int, int]) -> tuple[int, int]:
+def add_tuple(a: IVector, b: IVector) -> IVector:
     return a[0] + b[0], a[1] + b[1]
 
 
-def rotate(a: tuple[int, int], right: bool) -> tuple[int, int]:
+def rotate(a: IVector, right: bool) -> IVector:
     if not right:
         return -a[1], a[0]
     return a[1], -a[0]
 
 
-def invert(a: tuple[int, int]) -> tuple[int, int]:
+def invert(a: IVector) -> IVector:
     return -a[0], -a[1]
 
 
@@ -61,64 +90,118 @@ LEFT = (-1, 0)
 RIGHT = (1, 0)
 
 
-def create_grid(otk: Tukey) -> list[list[bool | None]]:
-    grid: list[list[bool | None]] = [[None for _ in range(6)] for _ in range(6)]
+def get_relative_displacement(last_dis: IVector, last_t_up: bool) -> tuple[IVector, IVector]:
+    if last_t_up:
+        if last_dis == RIGHT:
+            return UP, RIGHT
+        elif last_dis == DOWN:
+            return RIGHT, LEFT
+        elif last_dis == LEFT:
+            return LEFT, UP
+    else:
+        if last_dis == RIGHT:
+            return RIGHT, DOWN
+        elif last_dis == UP:
+            return LEFT, RIGHT
+        elif last_dis == LEFT:
+            return DOWN, LEFT
 
-    def confuse(tk, pos, dfrom, *, first=False):
-        grid[pos[1]][pos[0]] = first
 
-        if tk is None:
-            return 
+def create_displacement_tree(tk: Tukey, pos: IVector = (0, 0), last_dis: IVector = RIGHT) -> DisplaceTree:
+    l, r = None, None
 
-        if pos[0] % 2 == pos[1] % 2:
-            if dfrom == LEFT:
-                l = UP
-                r = RIGHT
-            elif dfrom == UP:
-                l = RIGHT
-                r = LEFT
-            elif dfrom == RIGHT:
-                l = LEFT
-                r = UP
-        else:
-            if dfrom == LEFT:
-                l = RIGHT
-                r = DOWN
-            elif dfrom == DOWN:
-                l = LEFT
-                r = RIGHT
-            elif dfrom == RIGHT:
-                l = DOWN
-                r = LEFT
+    last_t_up = pos[0] % 2 != pos[1] % 2
+    l_dis, r_dis = get_relative_displacement(last_dis, last_t_up)
 
-        if tk[0] is not None:
-            new_pos = add_tuple(pos, l)
-            confuse(tk[0], new_pos, invert(l))
+    if tk[0] is not None:
+        l = create_displacement_tree(tk[0], add_tuple(pos, l_dis), l_dis)
 
-        if tk[1] is not None:
-            new_pos = add_tuple(pos, r)
-            confuse(tk[0], new_pos, invert(r))
+    if tk[1] is not None:
+        r = create_displacement_tree(tk[1], add_tuple(pos, r_dis), r_dis)
 
-    confuse(otk, (2, 2), dfrom=LEFT, first=True)
+    return l_dis, l, r
+
+
+def render_displacement_tree(dt: DisplaceTree) -> str:
+    txt = str(dt[0])
+    txt += "\n"
+    txt += "Left:"
+    txt += "\n"
+    if dt[1] is not None:
+        txt += "\t" + render_displacement_tree(dt[1]).replace("\n", "\n\t")
+    txt += "\n"
+    txt += "Right:"
+    txt += "\n"
+
+    if dt[2] is not None:
+        txt += "\t" + render_displacement_tree(dt[2]).replace("\n", "\n\t")
+    txt += "\n"
+
+    return txt
+
+
+def create_grid(dis_tree: DisplaceTree) -> list[list[bool | None]]:
+    grid: list[list[bool | None]] = [[None for _ in range(10)] for _ in range(10)]
+
+    def traverse(pos, dt, first=False):
+        new_pos = add_tuple(pos, dt[0])
+        grid[new_pos[1]][new_pos[0]] = first
+
+        if dt[1] is not None:
+            traverse(new_pos, dt[1])
+
+        if dt[2] is not None:
+            traverse(new_pos, dt[2])
+
+    traverse((3, 2), dis_tree, True)
 
     return grid
 
 
-# surfaces = 6
-# units = surfaces - 2
-#
-#
-# slay = []
-#
-# for i in map("".join, product("+.", repeat=units*2)):
-#     try:
-#         t = parse_tukey(i)
-#     except SyntaxError:
-#         continue
-#
-#     if count_units(t) == units:
-#
-#         slay.append((i, t))
-#
-# for s in slay:
-#     print(*s)
+def create_grid_from_tukey(tk: Tukey) -> list[list[bool | None]]:
+    return create_grid(create_displacement_tree(tk))
+
+
+def normalize_tukey(tk: Tukey) -> Tukey:
+    if tk is None:
+        return tk
+
+    l = normalize_tukey(tk[0])
+    r = normalize_tukey(tk[1])
+
+    if count_units(l) < count_units(r):
+        return r, l
+
+    return l, r
+
+
+def is_normalized(tk: Tukey) -> bool:
+    return tk == normalize_tukey(tk)
+
+
+def generate_all_tukeys(surfaces: int) -> Generator[str, None, None]:
+    units = surfaces - 2
+
+    for i in map("".join, product("+.", repeat=units * 2)):
+        try:
+            t = parse_tukey(i)
+        except SyntaxError:
+            continue
+
+        if encode_tukey(t) != i:
+            print(f"{i} != {t}")
+
+        if count_units(t) != units:
+            continue
+
+        if t[1] is not None:
+            continue
+
+        # if not is_normalized(t):
+        #     continue
+
+        if count_units(t[0][0]) < count_units(t[0][1]):
+            continue
+
+
+        yield i
