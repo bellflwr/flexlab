@@ -2,7 +2,7 @@ from itertools import product
 
 import dearpygui.dearpygui as dpg
 
-from flexlab.tukey import create_grid, parse_tukey
+from flexlab.tukey import create_grid, parse_tukey, render_tree
 from mathutil import get_triangle_coordinates, fuck
 
 
@@ -13,7 +13,7 @@ def update_diagram(sender, app_data, user_data):
     print(app_data)
     print(user_data)
 
-    dpg.delete_item(user_data[0], children_only=True)
+    dpg.delete_item("Tukey Diagram", children_only=True)
 
     # for i in dpg.get_item_children(user_data[0]):
     #     print(i)
@@ -21,7 +21,7 @@ def update_diagram(sender, app_data, user_data):
 
     for x, y in product(range(40), range(20)):
         a, b, c = get_triangle_coordinates(x, y, 50)
-        dpg.draw_triangle(a, b, c, color=(100, 100, 100), parent=user_data[0])
+        dpg.draw_triangle(a, b, c, color=(100, 100, 100), parent="Tukey Diagram")
 
 
     # for x, y in product(range(8), range(8)):
@@ -31,7 +31,10 @@ def update_diagram(sender, app_data, user_data):
     #         a, b, c = get_triangle_coordinates(x, y, 50)
     #         dpg.draw_triangle(a, b, c)
 
-    tk = parse_tukey(dpg.get_value(user_data[1]))
+    tk = parse_tukey(dpg.get_value("Tukey Input"))
+
+    dpg.set_value("Tukey Tree", render_tree(tk))
+
     print(tk)
     joil = create_grid(tk)
 
@@ -39,7 +42,7 @@ def update_diagram(sender, app_data, user_data):
         for x, cell in enumerate(row):
             if cell is not None:
                 a, b, c = get_triangle_coordinates(x, y, 100)
-                dpg.draw_triangle(a, b, c, color=(255, 0, 0), parent=user_data[0])
+                dpg.draw_triangle(a, b, c, color=(255, 0, 0), parent="Tukey Diagram")
 
 
 
@@ -57,11 +60,18 @@ def main():
     dpg.bind_font(default_font)
 
     with dpg.window(label="Tukey Viewport", tag="Tukey Viewport", horizontal_scrollbar=True, autosize=True):
+        # for k, v in dpg.get_item_configuration("Tukey Viewport").items():
+        #     print(f"{k:>20}: {repr(v)}")
+        print(dpg.get_item_width("Tukey Viewport"), dpg.get_item_height("Tukey Viewport"))
         dw = dpg.add_drawlist(1000, 1000, tag="Tukey Diagram")
 
+
+
     with dpg.window(label="Primary Window", tag="Primary Window"):
-        inp = dpg.add_input_text(default_value="++....")
+        inp = dpg.add_input_text(default_value="++....", tag="Tukey Input")
         dpg.add_button(label="Render", callback=update_diagram, user_data=(dw, inp))
+        dpg.add_text(tag="Tukey Tree")
+
 
     dpg.setup_dearpygui()
     dpg.show_item_registry()

@@ -21,6 +21,14 @@ def parse_tukey(inp: Iterable[str]) -> Tukey:
         raise SyntaxError("Tree was never closed")
 
 
+def render_tree(tk: Tukey) -> str:
+    if tk is None:
+        return "."
+
+    else:
+        return "({} {})".format(render_tree(tk[0]), render_tree(tk[1]))
+
+
 def count_units(tk: Tukey) -> int:
     if tk is None:
         return 0
